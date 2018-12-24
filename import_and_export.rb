@@ -52,6 +52,7 @@ class Exporter
       posts_frag = client.posts(page: v, per_page: per_page).body.fetch('posts')
       posts << posts_frag.map { |post| extract_params(post) }
     end
+
     File.open(FILE_PATH, 'w') do |f|
       YAML.dump({ posts: posts.flatten }, f)
     end
@@ -102,6 +103,7 @@ class Importer
 
   def create(post:, retried: false)
     res = client.create_post(post)
+
     case res.status
     when 201
       puts "created: #{res.body['full_name']}"
@@ -133,4 +135,4 @@ class Importer
   end
 end
 Exporter.exports(access_token: Config::ACCESS_TOKEN, current_team: Config::PAST_TEAM)
-# Importer.imports(access_token: Config::ACCESS_TOKEN, current_team: Config::CURRENT_TEAM)
+Importer.imports(access_token: Config::ACCESS_TOKEN, current_team: Config::CURRENT_TEAM)
