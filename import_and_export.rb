@@ -1,12 +1,11 @@
 require 'bundler/setup'
 require 'esa'
-require 'pp'
 
 module Config
   FILE_PATH = './exported_from_esa_team.yaml'.freeze
-  ACCESS_TOKEN = ''.freeze # read/write対応
-  PAST_TEAM = ''.freeze # 移行元チーム名(サブドメイン)
-  CURRENT_TEAM = ''.freeze # 移行先チーム名(サブドメイン)
+  ACCESS_TOKEN = ENV['ACCESS_TOKEN'] || ''.freeze  # read/write対応
+  PAST_TEAM = ENV['PAST_TEAM'] || ''.freeze # 移行元チーム名(サブドメイン)
+  CURRENT_TEAM = ENV['CURRENT_TEAM'] || ''.freeze # 移行先チーム名(サブドメイン)
 end
 
 module Common
@@ -36,12 +35,12 @@ class Exporter
     @per_page = 50
   end
 
-  def self.export(access_token:, current_team:)
+  def self.exports(access_token:, current_team:)
     exporter = new(access_token: access_token, current_team: current_team)
-    exporter.export
+    exporter.exports
   end
 
-  def export
+  def exports
     return puts "already exist: #{FILE_PATH}" if File.exist?(FILE_PATH)
 
     res = client.posts(page: 1, per_page: per_page)
@@ -55,7 +54,7 @@ class Exporter
     end
 
     File.open(FILE_PATH, 'w') do |f|
-      YAML.dump({ posts: posts }, f)
+      YAML.dump({ posts: posts.flatten }, f)
     end
 
     puts "created: #{FILE_PATH}"
@@ -90,12 +89,12 @@ class Importer
     )
   end
 
-  def self.import(access_token:, current_team:)
+  def self.imports(access_token:, current_team:)
     importer = new(access_token: access_token, current_team: current_team)
-    importer.import
+    importer.imports
   end
 
-  def import
+  def imports
     posts = YAML.load_file(FILE_PATH)
     posts[:posts].each do |post|
       create(post: post)
@@ -111,6 +110,12 @@ class Importer
       File.open('./log.txt', 'w+') do |f|
         f.puts post
       end
+    when 400
+      puts "#{res.status} #{res.body['message']}"
+      exit 1 if retried
+
+      post[:user] = 'esa_bot'
+      create(post: post, retried: true)
     when 404
       puts "#{res.status} #{res.body['message']}"
       exit 1 if retried
@@ -123,11 +128,11 @@ class Importer
       wait_for(retry_after)
       create(post: post, retried: true)
     else
+      puts #{res}
       puts "failure with status: #{res.status}"
       exit 1
     end
   end
 end
-
-Exporter.export(access_token: Config::ACCESS_TOKEN, current_team: Config::PAST_TEAM)
-Importer.import(access_token: Config::ACCESS_TOKEN, current_team: Config::CURRENT_TEAM)
+Exporter.exports(access_token: Config::ACCESS_TOKEN, current_team: Config::PAST_TEAM)
+Importer.imports(access_token: Config::ACCESS_TOKEN, current_team: Config::CURRENT_TEAM)
